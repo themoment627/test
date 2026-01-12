@@ -16,25 +16,33 @@
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; }
         .math-font { font-family: 'Noto Serif TC', serif; font-style: italic; font-weight: bold; }
         .subscript { font-size: 0.75em; vertical-align: sub; line-height: 0; font-style: normal; margin-left: 1px; }
-        .formula-box { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 1rem; }
+        .formula-box { background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 1rem; }
         .animate-fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
-        /* 側邊欄專用白色數學字體 */
-        .white-math-font span, .white-math-font sub { color: white !important; }
+        
+        /* 側邊欄專用白色強制覆蓋 */
+        .sidebar-white-force, 
+        .sidebar-white-force span, 
+        .sidebar-white-force sub, 
+        .sidebar-white-force p, 
+        .sidebar-white-force div { 
+            color: white !important; 
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs (v11.6.1) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, updateDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
+        // 將 Firebase 函式掛載到 window 供 React 使用，確保所有函式都存在
         window.FirebaseOps = { 
-            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, 
             getFirestore, doc, setDoc, getDoc, collection, onSnapshot, updateDoc, query 
         };
     </script>
@@ -42,7 +50,7 @@
     <script type="text/babel">
         const { useState, useEffect, Fragment, useRef } = React;
 
-        // --- 1. 定義常數與題目 ---
+        // --- 1. 全域常數定義 (放在最前面防止 ReferenceError) ---
         const SEAT_OPTIONS = Array.from({ length: 30 }, (_, i) => (i + 1).toString().padStart(2, '0'));
         
         const LESSON_CONTENT = [
@@ -61,11 +69,12 @@
             { id: 5, title: "五、 利用公差完成等差數列 (參考課本 P14)", desc: "觀察間隔，填入適合的數。", questions: [{ id: "5_1_a", label: "(?), 24, 28, 32, (?) 中的第一個數", ans: "20" }, { id: "5_1_b", label: "最後一個數", ans: "36" }, { id: "5_2_a", label: "4x, 2x, (?), (?) 中的第三個數", ans: "0" }, { id: "5_2_b", label: "第四個數", ans: "-2x" }] },
             { id: 6, title: "六、 等差數列公式應用 (參考課本 P16、17)", desc: "公式：$a_n = a_1 + (n - 1)d$", questions: [{ id: "6_1", label: "已知 $a_1=85, d=-6$，求 $a_{15} =$", ans: "1" }, { id: "6_2", label: "若末項為 -35，則此數列共有多少項？", ans: "21" }, { id: "6_3", label: "已知 $a_{10}=72, d=8$，求首項 $a_1 =$", ans: "0" }] },
             { id: 7, title: "七、 圖形規律與一般項 (參考課本 P18)", desc: "觀察下方的圓點圖形規律並根據圖片作答。", hasImage: true, imageUrl: "https://drive.google.com/uc?id=1luicpHmVrUGB2H927fWlxr3g1Re_vhKV", questions: [{ id: "7_1", label: "請求第 50 個圖案 ($a_{50}$) =", ans: "202" }, { id: "7_2", label: "請求第 50 個圖案 ($b_{50}$) =", ans: "151" }] },
-            { id: 8, title: "八、 生活情境應用 (參考課本 P19)", desc: "目標存款金額計算。請以「2月1日」格式作答。", questions: [{ id: "8_1", label: "目標日期 (格式如：2月1日)", ans: "2月24日", hint: "計算需 54 天" }] },
+            { id: 8, title: "八、 生活情境應用 (參考課本 P19)", desc: "存款目標計算。請以「2月1日」格式作答。", questions: [{ id: "8_1", label: "目標日期 (格式如：2月1日)", ans: "2月24日", hint: "計算需 54 天" }] },
             { id: 9, title: "九、 等差數列應用 (參考課本 P20、21)", desc: "若 $a, b, c$ 成等差數列，則 $b = (a+c)/2$ 稱為等差中項。", questions: [{ id: "9_1", label: "已知 -6, b, 22 成等差，則 $b =$", ans: "8" }, { id: "9_2", label: "已知 $a, b, c$ 三數成等差，且總和為 -54，則中項 $b =$", ans: "-18" }] }
         ];
 
-        // --- 2. 工具組件 ---
+        // --- 2. 子組件定義 (放在 App 之前) ---
+
         const RenderMath = ({ text, colorClass = "text-indigo-700", isSidebar = false }) => {
             if (!text) return null;
             const parts = text.split('$');
@@ -75,7 +84,7 @@
                         if (i % 2 === 0) return <span key={i}>{part}</span>;
                         const mathSegments = part.split(/_(\{.*?\}|.)/);
                         return (
-                            <span key={i} className={`math-font mx-0.5 ${colorClass} ${isSidebar ? 'white-math-font' : ''}`}>
+                            <span key={i} className={`math-font mx-0.5 ${colorClass}`}>
                                 {mathSegments.map((seg, j) => {
                                     if (j % 2 === 0) return seg;
                                     const cleanSeg = seg && seg.startsWith('{') ? seg.slice(1, -1) : seg;
@@ -100,7 +109,6 @@
             return icons[type] || null;
         };
 
-        // --- 3. 頁面組件 ---
         function LoginPage({ onLogin, onAdmin }) {
             const [cls, setCls] = useState('201');
             const [seat, setSeat] = useState('01');
@@ -147,7 +155,7 @@
                                         </div>
                                     ) : (
                                         <div className="relative">
-                                            <input type="text" className={`w-full p-6 pr-16 rounded-[2rem] border-4 outline-none font-black text-2xl transition-all shadow-inner ${correct ? 'border-green-500 bg-green-50 text-green-700' : started ? 'border-red-100 bg-red-50 text-red-600' : 'border-slate-100 bg-slate-50 focus:border-indigo-600'}`} placeholder="輸入答案..." value={answers[q.id] || ''} onChange={e => onAns(q.id, e.target.value)} />
+                                            <input type="text" className={`w-full p-6 pr-16 rounded-[2rem] border-4 outline-none font-black text-2xl shadow-inner ${correct ? 'border-green-500 bg-green-50 text-green-700' : started ? 'border-red-100 bg-red-50 text-red-600' : 'border-slate-100 bg-slate-50 focus:border-indigo-600'}`} placeholder="輸入答案..." value={answers[q.id] || ''} onChange={e => onAns(q.id, e.target.value)} />
                                             <div className="absolute right-6 top-1/2 -translate-y-1/2">{correct ? <Icon type="check" className="text-green-500 w-10 h-10" /> : started ? <span className="text-red-300 font-black text-3xl">×</span> : null}</div>
                                         </div>
                                     )}
@@ -156,7 +164,7 @@
                             );
                         })}
                     </div>
-                    <div className="mt-16 flex justify-end"><button onClick={onBack} className="bg-slate-800 text-white px-12 py-5 rounded-[2rem] font-black shadow-xl hover:bg-indigo-600 transition-all active:scale-95">完成並返回目錄</button></div>
+                    <div className="mt-16 flex justify-end"><button onClick={onBack} className="bg-slate-800 text-white px-12 py-5 rounded-[2rem] font-black shadow-xl hover:bg-indigo-600 transition-all active:scale-95">完成作答，返回課程目錄</button></div>
                 </div>
             );
         }
@@ -199,7 +207,7 @@
         // --- 4. 主程式 App ---
         function App() {
             const [user, setUser] = useState(null);
-            const [role, setRole] = useState(null);
+            const [role, setRole] = useState(null); // {cls, seat} or 'teacher'
             const [activeSection, setActiveSection] = useState(null);
             const [studentAnswers, setStudentAnswers] = useState({});
             const [allStudents, setAllStudents] = useState([]);
@@ -207,33 +215,31 @@
             const [loading, setLoading] = useState(true);
             const dbRef = useRef(null);
 
-            const firebaseConfig = JSON.parse(__firebase_config);
+            // 從環境取得 Firebase 配置
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "" };
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'math-lesson-stable-final-v13';
 
             // 初始化身份驗證 (遵守 Rule 3)
             useEffect(() => {
                 const initAuth = async () => {
                     const OPS = window.FirebaseOps;
-                    if (!OPS) return;
+                    if (!OPS || !firebaseConfig.apiKey) {
+                        setLoading(false);
+                        return;
+                    }
                     try {
                         const app = OPS.initializeApp(firebaseConfig);
                         const auth = OPS.getAuth(app);
                         const db = OPS.getFirestore(app);
                         dbRef.current = db;
                         
-                        // 先嘗試身份驗證
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                          await OPS.signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                          await OPS.signInAnonymously(auth);
-                        }
-
-                        // 登入完成後監聽狀態
+                        // 先執行匿名登入
+                        const credential = await OPS.signInAnonymously(auth);
+                        
+                        // 登入完成後設置監聽
                         OPS.onAuthStateChanged(auth, (u) => {
                             if (u) {
                                 setUser(u);
-                            } else {
-                                setUser(null);
                             }
                             setLoading(false);
                         });
@@ -245,24 +251,19 @@
                 initAuth();
             }, []);
 
-            // 資料監聽：必須在 User 成功登入後啟動 (解決權限錯誤)
+            // 資料監聽：User 成功登入後啟動 (解決權限錯誤)
             useEffect(() => {
                 if (!user || !dbRef.current) return;
                 const OPS = window.FirebaseOps;
                 const db = dbRef.current;
 
-                // 只有在 User 確認後才進行 Snapshot 監聽
                 const unsubConfig = OPS.onSnapshot(OPS.doc(db, 'artifacts', appId, 'public', 'data', 'config', 'settings'), (ds) => {
                     if (ds.exists()) setConfig(ds.data());
-                }, err => {
-                    // 若發生權限錯誤，通常是因為資料庫尚未初始化，忽略之
-                });
+                }, err => console.warn("Snapshot permission pending..."));
 
                 const unsubStudents = OPS.onSnapshot(OPS.collection(db, 'artifacts', appId, 'public', 'data', 'students'), (snap) => {
                     setAllStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                }, err => {
-                    // 若發生權限錯誤，通常是因為資料庫尚未初始化，忽略之
-                });
+                }, err => console.warn("Snapshot permission pending..."));
 
                 return () => { unsubConfig(); unsubStudents(); };
             }, [user]);
@@ -339,13 +340,12 @@
                                             <span className="text-indigo-600 font-black">{s.score || 0} pnt</span>
                                         </div>
                                     ))}
-                                    {allStudents.filter(s => s.className === (role.cls || '201')).length === 0 && <p className="text-center py-10 text-slate-300 font-bold italic text-xs">目前尚無數據</p>}
                                 </div>
                             </div>
-                            <div className="bg-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+                            <div className="bg-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group sidebar-white-force">
                                 <Icon type="calculator" className="absolute -top-6 -right-6 w-40 h-40 opacity-10 group-hover:rotate-12 transition-transform duration-700" />
                                 <h3 className="text-slate-400 text-[10px] font-black uppercase mb-6 tracking-widest">概念小幫手 Helpful Tip</h3>
-                                <div className="text-sm font-bold space-y-6 text-white sidebar-math">
+                                <div className="text-sm font-bold space-y-6">
                                     <p>等差數列就像是在走階段階梯。</p>
                                     <p>首項 <RenderMath text="$a_1$" colorClass="text-white" isSidebar={true} /> 是起點的高度，公差 <RenderMath text="$d$" colorClass="text-white" isSidebar={true} /> 是每一階的固定寬度。</p>
                                     <div className="formula-box p-5 text-center shadow-inner">
